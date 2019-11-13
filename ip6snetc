@@ -1,0 +1,716 @@
+#!/usr/bin/env luajit
+
+--[[--------------------------------------------------------------------------------------------------------------
+	Copyright (c) 2019 Antti Antinoja
+
+	This program and the accompanying materials are made available under the
+	terms of the Eclipse Public License 2.0 which is available at
+	http://www.eclipse.org/legal/epl-2.0.
+
+	SPDX-License-Identifier: EPL-2.0
+--------------------------------------------------------------------------------------------------------------]]--
+
+--[[ Module specific globals ---------------------------------------------------------------------------------]]--
+
+local bit = require "bit"  --< BitOp: https://bitop.luajit.org/ >--
+
+local band, bor, bxor, bnot, lshift, rshift =
+	bit.band, bit.bor, bit.bxor, bit.bnot, bit.lshift, bit.rshift
+
+local sprintf=string.format
+
+local function rxo(table)
+	return setmetatable({}, {
+		__next = function(t, k) return next(table, k) end,
+		__index = table,
+		__newindex = function() error("R/O table") end,
+		-- __metatable = nil --< Not sure about this! >--
+	})
+end
+
+local my = {
+	ab_updated = "2019-11-10",
+	version = "0.1",
+	debug = false
+}
+
+--[[ LINKS -------------------------------------------------------------------------------------------------------
+	* https://www.iana.org/assignments/ipv6-address-space/ipv6-address-space.xhtml
+	* https://www.iana.org/assignments/iana-ipv6-special-registry/iana-ipv6-special-registry.xhtml
+--------------------------------------------------------------------------------------------------------------]]--
+
+my.i6ab = rxo {
+	rxo {
+		0, 0, 0, 0,  0, 0, 0, 1, pf = 128,
+		dsc = "Loopback Address",
+		rfc = "RFC4291",
+		src = false, dst = false, fwd = false, glb = false, rbp = true
+	},
+	rxo {
+		0, 0, 0, 0,  0, 0, 0, 0, pf = 128,
+		dsc = "Unspecified Address",
+		rfc = "RFC4921",
+		src = true,  dst = false, fwd = false, glb = false, rbp = true
+	},
+	rxo {
+		0, 0, 0, 0,  0, 0xffff, 0, 0, pf = 96,
+		dsc = "IPv4-mapped Addresses",
+		rfc = "RFC4291",
+		src = false, dst = false, fwd = false, glb = false, rbp = true
+	},
+	rxo {
+		0x64, 0xff9b, 0, 0,  0, 0, 0, 0, pf = 96,
+		dsc = "IPv4-IPv6 Translators",
+		rfc = "RFC6052",
+		src = true,  dst = true,  fwd = true,  glb = true,  rbp = false
+	},
+	rxo {
+		0x64, 0xff9b, 1, 0,  0, 0, 0, 0, pf = 48,
+		dsc = "Local-Use IPv4/IPv6 Translation Prefix",
+		rfc = "RFC8215",
+		src = true,  dst = true,  fwd = true,  glb = false, rbp = false
+	},
+	rxo {
+		0x100, 0, 0, 0,  0, 0, 0, 0, pf = 64,
+		dsc = "Discard-Only Address Block",
+		rfc = "RFC6666",
+		src = true,  dst = true,  fwd = true,  glb = false, rbp = false
+	},
+	rxo {
+		0x2001, 0, 0, 0,  0, 0, 0, 0, pf = 23,
+		dsc = "Initial IPv6 Sub-TLA ID Assignments",
+		rfc = "RFC2928",
+		src = false, dst = false, fwd = false, glb = false, rbp = false
+	},
+	rxo {
+		0x2001, 0, 0, 0,  0, 0, 0, 0, pf = 32,
+		dsc = "Teredo: Tunneling IPv6 over UDP through NATs",
+		rfc = "RFC4380, RFC8190",
+		src = true,  dst = true,  fwd = true,  glb = nil,   rbp = false
+	},
+	rxo {
+		0x2001, 1, 0, 0,  0, 0, 0, 1, pf = 128,
+		dsc = "Port Control Protocol (PCP) Anycast Address",
+		rfc = "RFC7723",
+		src = true,  dst = true,  fwd = true,  glb = true,  rbp = false
+	},
+	rxo {
+		0x2001, 1, 0, 0,  0, 0, 0, 2, pf = 128,
+		dsc = "Traversal Using Relays around NAT (TURN) Server Auto Discovery",
+		rfc = "RFC8155",
+		src = true,  dst = true,  fwd = true,  glb = true,  rbp = false
+	},
+	rxo {
+		0x2001, 2, 0, 0,  0, 0, 0, 0, pf = 48,
+		dsc = "IPv6 Benchmarking Methodology for Network Interconnect Devices",
+		rfc = "RFC5180, RFC Errata 1752",
+		src = true,  dst = true,  fwd = true,  glb = false, rbp = false
+	},
+	rxo {
+		0x2001, 3, 0, 0,  0, 0, 0, 0, pf = 32,
+		dsc = "Automatic Multicast Tunneling (AMT)",
+		rfc = "RFC7450",
+		src = true,  dst = true,  fwd = true,  glb = true,  rbp = false
+	},
+	rxo {
+		0x2001, 4, 0x112, 0,  0, 0, 0, 0, pf = 48,
+		dsc = "AS112 Redirection Using DNAME",
+		rfc = "RFC7535",
+		src = true,  dst = true,  fwd = true,  glb = true,  rbp = false
+	},
+	rxo {
+		0x2001, 0x10, 0, 0,  0, 0, 0, 0, pf = 28,
+		dsc = "Deprecated (previously ORCHID)",
+		rfc = "RFC4843",
+		src = nil,   dst = nil,   fwd = nil,   glb = nil,   rbp = nil
+	},
+	rxo {
+		0x2001, 0x20, 0, 0,  0, 0, 0, 0, pf = 28,
+		dsc = "An IPv6 Prefix for ORCHIDv2",
+		rfc = "RFC4843",
+		src = true,  dst = true,  fwd = true,  glb = true,  rbp = false
+	},
+	rxo {
+		0x2001, 0xdb8, 0, 0,  0, 0, 0, 0, pf = 32,
+		dsc = "IPv6 Address Prefix Reserved for Documentation",
+		rfc = "RFC3849",
+		src = false, dst = false, fwd = false, glb = false, rbp = false
+	},
+	rxo {
+		0x2002, 0, 0, 0,  0, 0, 0, 0, pf = 16,
+		dsc = "6to4 - Connection of IPv6 Domains via IPv4 Clouds",
+		rfc = "RFC3056",
+		src = true,  dst = true,  fwd = true,  glb = nil,   rbp = false
+	},
+	rxo {
+		0x2620, 0x4f, 0x8000, 0,  0, 0, 0, 0, pf = 48,
+		dsc = "Direct Delegation AS112 Service",
+		rfc = "RFC7534",
+		src = true,  dst = true,  fwd = true,  glb = true,  rbp = false
+	},
+	rxo {
+		0xfc00, 0, 0, 0,  0, 0, 0, 0, pf = 7,
+		dsc = "Unique-Local",
+		rfc = "RFC4193, RFC8190",
+		src = true,  dst = true,  fwd = true,  glb = false, rbp = false
+	},
+	rxo {
+		0xfe80, 0, 0, 0,  0, 0, 0, 0, pf = 10,
+		dsc = "Link Local Unicast",
+		rfc = "RFC4291",
+		src = true,  dst = true,  fwd = false, glb = false, rbp = true
+	}
+}
+
+my.cli = rxo {
+	["--split"] = { active = false, value = nil },
+	["-s"] = rxo { long = "--split" },
+
+	["--help"] = { active = false, value = nil },
+	["-h"] = rxo { long = "--help" },
+
+	["--show-np"] = { active = true, value = nil },
+	["-p"] = rxo { long = "--show-np" }
+}
+	
+m = rxo(my); my = nil
+
+--[[ IPv6 compressed format look-up table related ------------------------------------------------------------]]--
+
+--[[ fmt_mask(n6):
+	Create binary mask from (n6) and return it.
+	This is a 8 bit mask with 1 bit repesenting non zero in the related 16b block. ]]
+local function fmt_mask(n6)
+	local fm = 0
+	for n = 1, 8 do
+		if n6[n] ~= 0 then
+			fm = bor( fm, lshift(1, 8-n) )
+		end
+	end
+	return fm
+end
+
+--[[ gapt_populate():
+	Return populated  gapt, a temporary table containing all
+	"zero gaps" (2 or more consecutive 0-value 16b blocks)
+	within values from 0 to 255. ]]
+local function gapt_populate()
+	local gapt = {}
+	for n = 0, 255 do
+		local lmost = 0
+		local tip = 0
+		for x = 1, 8 do
+			tip = band( 0x100, lshift(n, x) )
+			if lmost == 0 and tip == 0 then lmost = x end
+			if lmost ~= 0 and tip ~= 0 then
+				if lmost ~= x-1 then
+					gapt[#gapt + 1] = {
+						left = lmost,
+						right = x - 1,
+						gap = x - 1 - lmost,
+						n = n
+					}
+				end
+				lmost = 0
+			end
+		end
+		if lmost ~= 0 and tip == 0 and (8 - lmost) > 0 then
+			gapt[#gapt + 1] = {
+				left = lmost,
+				right = 8,
+				gap = 8 - lmost,
+				n = n
+			}
+		end
+	end
+	return gapt
+end
+
+--[[ cp_gdata(t, s):
+	Copy table members from (s)ource to (t)arget. ]]
+local function cp_gdata(t, s)
+	t.left = s.left
+	t.right = s.right
+end
+
+--[[ gapl_add(il, ir, gapt, gapl):
+	Checks (gapt) rows from (il) to (ir) for the widest (or leftomost if all have same widht) zero gap and
+	creates new entry to (gapl) which then can be used as a rule for forming a compressed IPv6 notation. ]]
+local function gapl_add(il, ir, gapt, gapl)
+	gapl[ gapt[il].n ] = {}					   --< Assign the element as a table so it can be passed by ref.
+	if (il == ir) then                         --< Left and right *index* are the same => One gap only.
+		cp_gdata(gapl[ gapt[il].n ], gapt[il]) --< Assign zero gap info.
+	else                                       --< More than one gap, let's check for widest gap.
+		local i_h = il; il = il + 1
+		for x = il, ir do
+			if gapt[x].gap > gapt[i_h].gap then i_h = x end
+		end
+		cp_gdata(gapl[gapt[i_h].n], gapt[i_h]) --< Assign widest OR if all widths same assign the leftmost.
+	end
+end
+
+--[[ ipv6_frmt_lutlb_init():
+	Creates an Lua table containing reduced formatting rules for ipv6 nets and addresses. ]]
+local function fmt_table_create()
+	local gapt = gapt_populate()
+	local gapl = {}
+	local il = 1
+	for n = 1, #gapt do
+		local lg = gapt[n]
+		if gapt[il].n ~= lg.n then
+			local ir = n - 1
+			gapl_add(il, ir, gapt, gapl)
+			il = n
+		end
+	end
+	gapl_add(il, #gapt, gapt, gapl)
+	gapt = nil
+	return gapl
+end
+
+--[[ IPv6 presentation and network calculation ---------------------------------------------------------------]]--
+
+--[[ bm6(pref):
+	Creates and returns 128 bit (8 x 16 bit lua table)
+	wide binary presentation generated from (pref)ix. ]]
+local function bm6(pref)
+	local bm = { 0, 0, 0, 0, 0, 0, 0, 0 } --< Prefill the binary prefix table (8 x 16 bit blocks)
+	for n = 1, 8 do
+		if pref > (16 * n) then
+			bm[n] = 0xFFFF
+		else
+			if pref == (16 * n) then
+				bm[n] = 0xFFFF
+			else
+				-- Example:
+				--    pref == 17 we'll enter here while n == 2
+				--    So the MSB of 2nd 16 bit block needs to be set to 1, rest of the bits 0
+				--    t = 2^(16 * 2 - 17  ) - 1 == 0x7fff
+				local t = 2^(16 * n - pref) - 1
+				--                                        1111111
+				--                                        6543210987654321
+				--         0xffff - 0x7fff == 0x8000 == 0y1000000000000000
+				bm[n] = 0xFFFF - t
+			end
+			break;
+		end
+	end
+	return bm
+end
+
+--[[ fmt_str_get(n6, fmt):
+	Convert from 8 16 bit binary block to compressed IPv6 format presentation returned as a string ]]
+function fmt_str_get(n6, fmt)
+	local n = 1
+	local str = ""
+	while (n < 9) do
+		if n == fmt.left then
+			str = str..":"
+			n = fmt.right + 1
+		else
+			str = str..string.format( "%x", n6[n] )
+			if n ~= 8 then str = str..":" end
+			n = n + 1
+		end
+	end
+	return str
+end
+
+function adr_str_get(n6)
+	local str=""
+	local fmt = gapl[ fmt_mask(n6) ]                            --< Get formatting rule
+	if fmt then
+		str = fmt_str_get(n6, fmt)
+	else
+		for n = 1, 7 do
+			str = str..string.format( "%x", n6[n] )..":"
+		end
+		str = str..string.format( "%x", n6[8] )
+	end
+	return str
+end
+
+function net_str_get(n6, bm)
+	local str=""
+	local t6 = {}
+	for n = 1, 8 do t6[n] = band( n6[n], bm[n] ) end            --< Apply mask
+	local fmt = gapl[ fmt_mask(t6) ]                            --< Get formatting rule
+	if fmt then
+		str = fmt_str_get(t6, fmt)
+	else
+		for n = 1, 7 do
+			str = str..string.format( "%x", t6[n] )..":"
+		end
+		str = str..string.format( "%x", t6[8] )
+	end
+	return str.."/"..n6.pf
+end
+
+function pfx_str_get(n6, bm)
+	local str = ""
+	for n = 1, 7 do
+		str = str..string.format("%04x", bm[n])..":"
+	end
+	str = str..string.format("%04x", bm[8])
+	return str
+end
+
+function first_adr_str_get(n6, bm)
+	local seg
+	local str = ""
+	for n = 1, 7 do
+		seg = band(n6[n], bm[n])
+		str = str..sprintf("%04x:", seg)
+	end
+	local n = 8
+	seg = band(n6[n], bm[n])
+	str = str..sprintf("%04x", seg)
+	return str
+end
+
+function last_adr_str_get(n6, bm)
+	local seg
+	local str = ""
+	for n = 1, 7 do
+		-- Note: BitOp operates on 32 bit integers - hence
+		-- adding 0xFFFF0000 to the mask before inversion:
+		seg = bor( band(n6[n], bm[n]), bnot( bor(0xFFFF0000, bm[n]) ) )
+		str = str..sprintf("%04x:", seg)    --< This is expensive, but not because of stroing.format!
+	end
+	local n = 8
+	seg = bor( band(n6[n], bm[n]), bnot( bor(0xFFFF0000, bm[n]) ) )
+	str = str..sprintf("%04x", seg)
+	return str
+end
+
+local function first_snet_get(n6, bm, prefix)
+	local new_net = { 0, 0, 0, 0,   0, 0, 0, 0,  pf=0 }
+	for n = 1, 8 do
+		new_net[n] = band(n6[n], bm[n])
+	end
+	new_net.pf = prefix
+	return new_net
+end
+
+local function is_a_member_of_b(a6, b6)
+	local abm, bbm = bm6(a6.pf), bm6(b6.pf)
+	if a6.pf < b6.pf then return false end
+	local a_masked = first_snet_get(a6, bbm, 0)
+	local b_masked = first_snet_get(b6, bbm, 0)
+	local columns = math.ceil(b6.pf/128*8)
+	local match = 1
+	for col = 1, columns do
+		if a_masked[col] ~= b_masked[col] then return false end
+	end
+	return true
+end
+
+local function addr_blck_get(a6)
+	--[[ local next begin
+		 For itereating the read only proxy table.
+		 See: http://lua-users.org/wiki/GeneralizedPairsAndIpairs ]]
+	local rawnext = next
+	local function next(t,k)
+		local m = getmetatable(t)
+		local n = m and m.__next or rawnext
+		 return n(t,k)
+	end
+	--[[ local next end ]]
+	for k, b6 in next, m.i6ab do
+		if is_a_member_of_b(a6, b6) then
+			return b6
+		end
+	end
+	return nil
+end
+
+function wide_adder_get(bm)
+	local adder = 0
+	for n = 1, 7 do
+		if bm[n+1] == 0 then
+			local t = bm[n] - 1
+			adder = bnot( bor(0xFFFF0000,t) ) * 2^(16*(8-n))
+			break
+		end
+	end
+	if adder == 0 then
+		local n = 8
+		local t = bm[n] - 1
+		adder = bnot( bor(0xFFFF0000,t) ) * 2^(16*(8-n))
+	end
+	return adder
+end
+
+--[[ lsc_adder_and_mask_set(bm_top, bm_new, aa)
+	This calculates incerementation value need for iterating between subnets. Also generates LSC mask. ]]
+local function lsc_adder_and_mask_set(bm_top, bm_new, aa)
+	local n=0
+	while aa.MSC==0 do       --< Search first 16 bit block which differs. Save the column in question to MSC.
+		n = n + 1
+		if bm_top[n] ~= bm_new[n] then
+			aa.MSC=n
+			break
+		end
+	end
+	for n = n, 8 do          --< Search last 16 bit block which differs. Save the column in question to LSC.
+		if bm_top[n] == bm_new[n] then
+			aa.LSC = n - 1
+			break
+		else                 --< Even the last column differs
+			aa.LSC = 8
+		end
+	end
+	aa.adder = bnot ( bor (0xFFFF0000, bm_new[aa.LSC] - 1) )
+	aa.mask = bnot( bor(0xFFFF0000, bm_top[aa.LSC]) )
+end
+
+--[[ col_by_one_inc(i6, bm_top, col):
+	Increments columns above LSC. ]]
+local function col_by_one_inc(i6, bm_top, col)
+	local c_msk = bnot( bor(0xFFFF0000, bm_top[col]) ) --< Invert columns prefix and from a mask.
+	local c_val = band ( c_msk, i6[col] ) + 1          --< Increment by one
+	if c_val > 0xFFFF then                             --< We overflowed this column so expand the left (up)
+		if col_by_one_inc(i6, bm_top, col-1) == 2 then
+			return 2                                   --< OverFlow
+		end
+		c_val = band(0x0000FFFF, c_val)
+	end
+	if c_val > c_msk then                              --< Passed the mask -> Return with overflow status
+		return 2                                       --< OverFlow
+	end
+	i6[col] = i6[col] + 1
+	return 0
+end
+
+--[[ lsc_by_adder_inc(i6, bm_top, aa)
+	Increment LSC by adder and, if the mask allows, expand to higher columns when overflowig LSC. ]]
+local function lsc_by_adder_inc(i6, bm_top, aa)
+	local col = aa.LSC
+	local c_val = band ( aa.mask, i6[col] ) + aa.adder --< Form columns masked value & increment it by adder.
+	if col == aa.MSC then                              --< Networks don't expand above LSC.
+		if c_val > aa.mask then                        --< Incrementation exceeded the mask -> no more nets.
+			return 2                                   --< OverFlow
+		end
+	end
+	if c_val > 0xFFFF then                             --< Increment to higher column (if allowed)
+		if col_by_one_inc(i6, bm_top, col - 1) == 2 then
+			return 2                                   --< OverFlow
+		end
+	end
+	i6[col] = i6[col] + aa.adder
+	return 0
+end
+
+function top_net_print(n6)
+	local bm = bm6(n6.pf)
+	local adb = addr_blck_get(n6)
+	print( " --- IPv6 network / address information:\n" )
+	print( " Address "..adr_str_get(n6) )
+	print( " Network "..net_str_get(n6, bm) )
+	print( "  Prefix "..pfx_str_get(n6, bm) )
+	print( "    from "..first_adr_str_get(n6, bm) )
+	print( "      to "..last_adr_str_get(n6, bm) )
+	if adb then
+		print( "    Type "..adb.dsc )
+		print( "     RFC "..adb.rfc )
+		io.write( "     src " ); print( adb.src )
+		io.write( "     dst " ); print( adb.dst )
+		io.write( "     fwd " ); print( adb.fwd )
+		io.write( "  global " ); print( adb.glb )
+		io.write( "IPv6 res " ); print( adb.rbp )
+	end
+	print ""
+end
+
+function subnets_print(n6, nprefix)
+	local bm = bm6(n6.pf)
+	local bm_new = bm6(nprefix)
+	local a_top = wide_adder_get(bm)
+	local a_new = wide_adder_get(bm_new)
+	local atomic_adder = {
+		adder = nil,
+		mask = nil,         --< Portion of top level prefix shadowing LSC.
+		MSC = 0,            --< MSC (most significant col) - highest column the incremantation will touch.
+		LSC = 0             --< LSC (least significant col) - column from which "adder" is extracted from.
+	}
+	local nets = a_top/a_new
+	local i6 = first_snet_get(n6, bm, nprefix)
+	lsc_adder_and_mask_set(bm, bm_new, atomic_adder) --< atomic_adder will be modified!
+	print( " --- Subnet data:\n" )
+	print( "  Subnet Prefix /"..nprefix )
+	print( " Subnets "..nets.."\n" )
+	if m.debug then
+		print( "--- Subnet debug information:" )
+		print( "   adder 0x"..string.format("%x", a_new) )
+		print( "     MSC "..atomic_adder.MSC )
+		print( "     LSC "..atomic_adder.LSC )
+		print( "  aadder 0x"..string.format("%x", atomic_adder.adder) )
+		print( "--- End of subnet debug information" )
+	end
+	if m.cli["--show-np"].active then
+		print( " Network "..net_str_get(i6, bm_new) )
+		print( "  Prefix "..pfx_str_get(i6, bm_new) )
+	end
+	print( "    from "..first_adr_str_get(i6, bm_new) )
+	print( "      to "..last_adr_str_get(i6, bm_new) )
+	while 1 do
+		if lsc_by_adder_inc(i6, bm, atomic_adder) == 2 then break end
+		if m.cli["--show-np"].active then
+			print ""
+			print( " Network "..net_str_get(i6, bm_new) )
+			print( "  Prefix "..pfx_str_get(i6, bm_new) )
+		end
+		print( "    from "..first_adr_str_get(i6, bm_new) )
+		print( "      to "..last_adr_str_get(i6, bm_new) )
+	end
+end
+
+local function i6_str_prefix_get(ip_s, tnet)
+	local tmp = ip_s:match("/%d%d?%d?$") --< 1st digit is mandatory, two consecutive ones are optional
+	if tmp == nil then
+		tmp = ip_s:match("/..?.?.?")     --< Can we give user some clue what's wrong with the given prefix?
+		if tmp == nil then
+			return false, "Error: Missing prefix."
+		else
+			return false, "Error: Prefix: "..ip_s:match("/.?.?.?.?")..".."
+		end
+	end
+	tmp = tmp:gsub("^/", "")             --< Eliminate leading '/' so we can convert tmp to a number
+	tnet.pf = tonumber(tmp)
+	if tnet.pf > 128 then                --< '-' not allowed so no need to check for negative numbers
+		return false,
+		"Error: Given prefix: "..pref..". IPv6 defined prefix range: 0 - 128"
+	end
+	return true
+end
+
+--[[ str_to_bar(str)
+	Convert hex character segments in (str) to an array of "integers"
+	and return the array. ]]
+local function str_to_bar(str)
+	local ar = {}
+	for n in str:gmatch "%x+" do
+		local tmp = n
+		if #tmp > 4 then
+			return nil, "Too many digits in segment ("..tmp..")"
+		end
+		ar[#ar + 1] = tonumber(n,16)
+	end
+	if #ar > 8 then
+		return nil, "Too many ("..#ar..") address segments"
+	else
+		return ar
+	end
+end
+
+local function i6_str_parse(ip_s, tnet)
+	-- Check against allowed symbols
+	if ip_s:find( "[^%x:/]" ) then
+		return false, "Illegal character(s)"
+	end
+	-- Check against maximum length
+	if #ip_s > 43 then
+		return false, "Address string too long!"
+	end
+	-- Extract prefix
+	local status, emsg = i6_str_prefix_get(ip_s, tnet)
+	if not status then return false, emsg end
+	ip_s = ip_s:gsub("/.*$", "")          --< Trim prefix
+	-- Extract address
+	local dcol = ip_s:gmatch("()::")	  --< Return iterating function which returns "::" position in ip_s
+	local split = dcol()
+	if dcol() then                        --< This works because dcol is an iterating function
+		return false, "Only one \"::\" sequence allowed"
+	end
+	if split then                         --< Handle splitted (compressed) addrress, left & right side
+		local left_ar, emsg = str_to_bar( ip_s:sub(1, split - 1) )
+		if not left_ar then return false, emsg end
+		local right_ar, emsg = str_to_bar( ip_s:sub(split+2, #ip_s) )
+		if not right_ar then return false, emsg end
+		if #right_ar + #left_ar > 7 then  --< 7 will allow single zero segment to be "compressed". Is this OK?
+			return false, "Too many segments in compressed address"
+		end
+		-- Populate left side of "::"
+		for a = 1, #left_ar do            --< a)scending
+			tnet[a] = left_ar[a]
+		end
+		-- Populate right side of "::"
+		local ti = 9
+		for d = #right_ar, 1, -1 do       --< d)escending
+			ti = ti - 1
+			tnet[ti] = right_ar[d]
+		end
+	else                                  --< Handle full (not compressed) address
+		local ar, emsg = str_to_bar(ip_s)
+		if not ar then return false, emsg end
+		if #ar < 8 then
+			return false,
+			"Less than 8 segements in uncompressed array"
+		end
+		for a = 1, 8 do tnet[a] = ar[a] end
+	end
+	return true
+end
+
+local function i6_prefix_str_to_int(pref_s)
+	if pref_s:find("[^%d]") then
+		return nil,
+		"Illegal characters in subnet prefix"
+	end
+	if #pref_s > 3 then
+		return nil,
+		"Subnet prefix has too many characters (max: 3)"
+	end
+	local nps=pref_s:match("^%d%d?%d?$")
+	local np = tonumber(nps)
+	if np > 128 then
+		return nil,
+		"Subnet prefix value out of bounds (0 - 128)"
+	end
+	return np
+end
+
+--[[ Some help, cli parsing, main and notes ------------------------------------------------------------------]]--
+
+local function usage_show(cmd)
+	if cmd == "error_exit" then
+		usage_show()
+		os.exit(1)
+	else
+		print "Usage: ip6snetc <IPv6 network address> [<subnet prefix>]"
+	end
+end
+
+local function cli_opts(arg)
+	local tnet = { 0, 0, 0, 0,  0, 0, 0, 0, pf=0 }
+	-- Check against allowed number of arguments
+	if #arg == 0 then usage_show(); os.exit(0)  end
+	if #arg > 2 then
+		io.stderr:write("Error: Too many arguments\n")
+		usage_show("error_exit")
+	end
+	-- Parse given IPv6 network / address	
+	local status, emsg = i6_str_parse(arg[1], tnet)
+	if not status then io.stderr:write("Error: "..emsg.."\n"); usage_show("error_exit") end
+	local np = 0
+	-- Handle optional subnet prefix
+	if arg[2] then
+		np, emsg = i6_prefix_str_to_int(arg[2])
+		if not np then io.stderr:write("Error: "..emsg.."\n"); usage_show("error_exit") end
+		if np <= tnet.pf then
+			io.stderr:write("Error: Subnet prefix equals, or exceeds, network size\n")
+			usage_show("error_exit")
+		end
+	end
+	return tnet, np
+end
+
+local function main(arg)
+	local tnet, np = cli_opts(arg)
+	gapl = fmt_table_create()
+	top_net_print(tnet)
+	if (np > 0 ) then subnets_print(tnet, np) end
+end
+
+main(arg)
+
