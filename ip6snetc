@@ -173,7 +173,7 @@ my.cli = rxo {
 	["-p"] = rxo { long = "--show-np" }
 }
 	
-m = rxo(my); my = nil
+local m = rxo(my); my = nil
 
 --[[ IPv6 compressed format look-up table related ------------------------------------------------------------]]--
 
@@ -197,24 +197,24 @@ end
 local function gapt_populate()
 	local gapt = {}
 	for n = 0, 255 do
-		local lmost = 0
+		local lmost = 0                                     --< 0 value for lmost means "no position"
 		local tip = 0
-		for x = 1, 8 do
-			tip = band( 0x100, lshift(n, x) )
-			if lmost == 0 and tip == 0 then lmost = x end
-			if lmost ~= 0 and tip ~= 0 then
-				if lmost ~= x-1 then
-					gapt[#gapt + 1] = {
+		for x = 1, 8 do                                     --< We'll rotate bits from left to right.
+			tip = band( 0x100, lshift(n, x) )               --< Filter out x:th bit from n and save it to tip.
+			if lmost == 0 and tip == 0 then lmost = x end   --< Update lmost (leftmost) zero position to equal x.
+			if lmost ~= 0 and tip ~= 0 then                 --< Did we reach non zero value on x:th bit?
+				if lmost ~= (x - 1) then                    --< Yes we did. gap is larger than one?
+					gapt[#gapt + 1] = {                     --< Yes it is. Add a record to gapt for n wit gap info.
 						left = lmost,
 						right = x - 1,
 						gap = x - 1 - lmost,
 						n = n
 					}
 				end
-				lmost = 0
+				lmost = 0                                   --< lmost back to 0 ("no position").
 			end
 		end
-		if lmost ~= 0 and tip == 0 and (8 - lmost) > 0 then
+		if lmost ~= 0 and tip == 0 and (8 - lmost) > 0 then --< Check against the last (rightmost) bit of n.
 			gapt[#gapt + 1] = {
 				left = lmost,
 				right = 8,
@@ -235,9 +235,9 @@ end
 
 --[[ gapl_add(il, ir, gapt, gapl):
 	Checks (gapt) rows from (il) to (ir) for the widest (or leftomost if all have same widht) zero gap and
-	creates new entry to (gapl) which then can be used as a rule for forming a compressed IPv6 notation. ]]
+	creates new entry to (gapl) which then can be used as a rule for forming compressed IPv6 notation. ]]
 local function gapl_add(il, ir, gapt, gapl)
-	gapl[ gapt[il].n ] = {}					   --< Assign the element as a table so it can be passed by ref.
+	gapl[ gapt[il].n ] = {}					   --< Create new gapl element.
 	if (il == ir) then                         --< Left and right *index* are the same => One gap only.
 		cp_gdata(gapl[ gapt[il].n ], gapt[il]) --< Assign zero gap info.
 	else                                       --< More than one gap, let's check for widest gap.
@@ -245,25 +245,25 @@ local function gapl_add(il, ir, gapt, gapl)
 		for x = il, ir do
 			if gapt[x].gap > gapt[i_h].gap then i_h = x end
 		end
-		cp_gdata(gapl[gapt[i_h].n], gapt[i_h]) --< Assign widest OR if all widths same assign the leftmost.
+		cp_gdata(gapl[gapt[i_h].n], gapt[i_h]) --< Assign widest OR, if all widths are same, assign the leftmost.
 	end
 end
 
---[[ ipv6_frmt_lutlb_init():
+--[[ fmt_table_create():
 	Creates an Lua table containing reduced formatting rules for ipv6 nets and addresses. ]]
 local function fmt_table_create()
-	local gapt = gapt_populate()
-	local gapl = {}
+	local gapt = gapt_populate()               --< Create temporary table.
+	local gapl = {}                            --< This will be the look-up table.
 	local il = 1
 	for n = 1, #gapt do
 		local lg = gapt[n]
-		if gapt[il].n ~= lg.n then
-			local ir = n - 1
-			gapl_add(il, ir, gapt, gapl)
-			il = n
+		if gapt[il].n ~= lg.n then             --< Last same value n in gapt?
+			local ir = n - 1                   --< Yes. Set right index to point one step left from current.
+			gapl_add(il, ir, gapt, gapl)       --< Check from il to ir and save selected formatting rule to gapl.
+			il = n                             --< Reset left index.
 		end
 	end
-	gapl_add(il, #gapt, gapt, gapl)
+	gapl_add(il, #gapt, gapt, gapl)            --< Handle agains last element in gapt.
 	gapt = nil
 	return gapl
 end
@@ -300,7 +300,7 @@ end
 
 --[[ fmt_str_get(n6, fmt):
 	Convert from 8 16 bit binary block to compressed IPv6 format presentation returned as a string ]]
-function fmt_str_get(n6, fmt)
+local function fmt_str_get(n6, fmt)
 	local n = 1
 	local str = ""
 	while (n < 9) do
@@ -316,7 +316,7 @@ function fmt_str_get(n6, fmt)
 	return str
 end
 
-function adr_str_get(n6)
+local function adr_str_get(n6)
 	local str=""
 	local fmt = gapl[ fmt_mask(n6) ]                            --< Get formatting rule
 	if fmt then
@@ -330,7 +330,7 @@ function adr_str_get(n6)
 	return str
 end
 
-function net_str_get(n6, bm)
+local function net_str_get(n6, bm)
 	local str=""
 	local t6 = {}
 	for n = 1, 8 do t6[n] = band( n6[n], bm[n] ) end            --< Apply mask
@@ -346,7 +346,7 @@ function net_str_get(n6, bm)
 	return str.."/"..n6.pf
 end
 
-function pfx_str_get(n6, bm)
+local function pfx_str_get(n6, bm)
 	local str = ""
 	for n = 1, 7 do
 		str = str..string.format("%04x", bm[n])..":"
@@ -355,7 +355,7 @@ function pfx_str_get(n6, bm)
 	return str
 end
 
-function first_adr_str_get(n6, bm)
+local function first_adr_str_get(n6, bm)
 	local seg
 	local str = ""
 	for n = 1, 7 do
@@ -368,7 +368,7 @@ function first_adr_str_get(n6, bm)
 	return str
 end
 
-function last_adr_str_get(n6, bm)
+local function last_adr_str_get(n6, bm)
 	local seg
 	local str = ""
 	for n = 1, 7 do
@@ -424,7 +424,7 @@ local function addr_blck_get(a6)
 	return nil
 end
 
-function wide_adder_get(bm)
+local function wide_adder_get(bm)
 	local adder = 0
 	for n = 1, 7 do
 		if bm[n+1] == 0 then
@@ -501,7 +501,7 @@ local function lsc_by_adder_inc(i6, bm_top, aa)
 	return 0
 end
 
-function top_net_print(n6)
+local function top_net_print(n6)
 	local bm = bm6(n6.pf)
 	local adb = addr_blck_get(n6)
 	print( " --- IPv6 network / address information:\n" )
@@ -522,7 +522,7 @@ function top_net_print(n6)
 	print ""
 end
 
-function subnets_print(n6, nprefix)
+local function subnets_print(n6, nprefix)
 	local bm = bm6(n6.pf)
 	local bm_new = bm6(nprefix)
 	local a_top = wide_adder_get(bm)
