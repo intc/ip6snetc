@@ -94,6 +94,6 @@ In case you'd like to use standard Lua instead, you'll need to edit the first li
 Other option is to call the script directly with Lua. Example:
 
 ```
-$ lua ip6snetc 2001:db8:1/32
+$ lua ip6snetc 2001:db8::1/32
 ```
 
