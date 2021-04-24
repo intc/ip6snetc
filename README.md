@@ -2,6 +2,12 @@
 
 ip6snetc is a tool for caclulating and listing IPv6 networks.
 
+## Eclipse Public License 2.0
+
+ip6snetc is licensed under Eclipse Public License 2.0.
+
+* [EPL-2.0 FAQ](https://www.eclipse.org/legal/epl-2.0/faq.php)
+
 ## Usage
 
 ```
