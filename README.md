@@ -1,6 +1,6 @@
 # ip6snetc
 
-ip6snetc is a tool for caclulating and listing IPv6 networks.
+ip6snetc is a tool for calculating and listing IPv6 networks.
 
 ## License
 
@@ -11,7 +11,7 @@ ip6snetc is licensed under Eclipse Public License 2.0.
 ## Usage
 
 ```
-ip6snetc <IPv6 network address> [<subnet prefix>]
+# ip6snetc <IPv6 network address> [<subnet prefix>]
 ```
 
 ## Examples
@@ -19,7 +19,7 @@ ip6snetc <IPv6 network address> [<subnet prefix>]
 ### Show information regarding given network / address
 
 ```
-$ ./ip6snetc 2001:db8::1/32
+# ./ip6snetc 2001:db8::1/32
 ```
 ```
  --- IPv6 network / address information:
@@ -41,7 +41,7 @@ IPv6 res false
 ### Caclulate and list subnets for given network and subnet prefix
 
 ```
-$ ./ip6snetc 2001:db8::1/32 33
+# ./ip6snetc 2001:db8::1/32 33
 ```
 ```
  --- IPv6 network / address information:
@@ -84,7 +84,7 @@ Luajit has BitOp integrated. For standard Lua one needs to install BitOp separat
 ### An example of installing Lua BitOp on Gentoo
 
 ```
-$ sudo emerge -v LuaBitOp
+# sudo emerge -v LuaBitOp
 ```
 
 ## Notes
@@ -100,6 +100,6 @@ In case you'd like to use standard Lua instead, you'll need to edit the first li
 Other option is to call the script directly with Lua. Example:
 
 ```
-$ lua ip6snetc 2001:db8::1/32
+# lua ip6snetc 2001:db8::1/32
 ```
 
